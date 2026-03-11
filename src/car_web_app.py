@@ -1,5 +1,13 @@
-import streamlit as st
 import sys
+
+# --- 💡 关键补丁：必须放在最顶部，甚至在 import streamlit 之前 ---
+try:
+    __import__('pysqlite3')
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+    
+import streamlit as st
 # 导入你 final 代码里的 run_agent 函数
 from car_agent_final import run_agent
 
