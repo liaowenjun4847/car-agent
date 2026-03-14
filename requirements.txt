@@ -3,3 +3,4 @@ openai
 zhipuai
 chromadb
 pysqlite3-binary
+pypdf
