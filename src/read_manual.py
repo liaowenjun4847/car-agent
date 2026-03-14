@@ -1,8 +1,8 @@
 import os
 from pypdf import PdfReader
 
-# 1. 鲁棒性体现：使用绝对路径，并增加存在性检查
-pdf_dir = "/home/LiaoWenjun/car_ai_project/data/raw_docs/"
+# 💡 以后要换车型或改路径，只需要改下面这一行！
+pdf_dir = "/home/LiaoWenjun/car_ai_project/data/raw_docs/Qin_PLUS/"
 
 def check_and_read():
     # 检查文件夹是否存在 
@@ -20,7 +20,7 @@ def check_and_read():
     pdf_file = os.path.join(pdf_dir, files[0])
     
     try:
-        # 2. 鲁棒性体现：增加异常捕捉，防止 PDF 损坏导致程序崩溃 
+        # 鲁棒性体现：增加异常捕捉
         reader = PdfReader(pdf_file)
         print(f"✅ 成功加载手册: {files[0]}")
         print(f"📄 总页数: {len(reader.pages)}")
