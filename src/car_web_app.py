@@ -13,6 +13,10 @@ from car_agent_final import run_agent
 
 # --- 网页页面配置 ---
 st.set_page_config(page_title="秦PLUS 智能管家", page_icon="🚗")
+if "conversation_history" not in st.session_state:
+    st.session_state.conversation_history = [
+        {"role": "system", "content": "你是一位专业的秦PLUS DM-i智能管家。你擅长结合实时天气工具和车主手册为用户提供精准建议。"}
+    ]
 
 st.title("🚗 秦PLUS DM-i 智能技术顾问")
 st.markdown("---")
