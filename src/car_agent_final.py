@@ -16,8 +16,11 @@ from openai import OpenAI
 from zhipuai import ZhipuAI
 import chromadb
 from chromadb.config import Settings
-from config import DEEPSEEK_KEY, DEEPSEEK_BASE_URL, ZHIPU_KEY, DB_PATH
 from tools import get_weather, TOOLS_DEFINITION
+DEEPSEEK_KEY = st.secrets["DEEPSEEK_KEY"]
+DEEPSEEK_BASE_URL = st.secrets.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+ZHIPU_KEY = st.secrets["ZHIPU_KEY"]
+DB_PATH = "data/vector_db"
 
 ai_client = OpenAI(api_key=DEEPSEEK_KEY, base_url=DEEPSEEK_BASE_URL, timeout=60.0)
 zp_client = ZhipuAI(api_key=ZHIPU_KEY)
