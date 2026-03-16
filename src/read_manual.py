@@ -1,37 +1,52 @@
 import os
 from pypdf import PdfReader
 
-# 💡 以后要换车型或改路径，只需要改下面这一行！
-pdf_dir = "/home/LiaoWenjun/car_ai_project/data/raw_docs/Qin_PLUS/"
+# 💡 现在我们定义总的根目录，代码会自动往下钻
+base_raw_dir = "/home/LiaoWenjun/car_ai_project/data/raw_docs/"
 
-def check_and_read():
-    # 检查文件夹是否存在 
-    if not os.path.exists(pdf_dir):
-        print(f"❌ 错误：找不到目录 {pdf_dir}，请检查路径是否正确。")
+def get_all_car_manuals():
+    """
+    扫描 base_raw_dir 下的所有 PDF，并根据文件夹名字自动打标签
+    返回一个列表，包含：文件路径、文件名、所属品牌/车型(标签)
+    """
+    manuals = []
+    
+    if not os.path.exists(base_raw_dir):
+        print(f"❌ 错误：找不到总目录 {base_raw_dir}")
+        return manuals
+
+    # 使用 os.walk 递归遍历所有子文件夹
+    for root, dirs, files in os.walk(base_raw_dir):
+        for file in files:
+            if file.endswith('.pdf'):
+                full_path = os.path.join(root, file)
+                # 🏷️ 自动提取文件夹名字作为标签
+                # 例如：/data/raw_docs/tesla/model_y.pdf -> 标签就是 tesla
+                tag = os.path.basename(root)
+                
+                manuals.append({
+                    "path": full_path,
+                    "filename": file,
+                    "tag": tag
+                })
+    
+    return manuals
+
+def check_all_manuals():
+    manuals = get_all_car_manuals()
+    
+    if not manuals:
+        print(f"⚠️ 警告：在 {base_raw_dir} 下没找到任何 PDF 文件。")
         return
 
-    files = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
-    
-    # 检查文件夹内是否有文件 
-    if not files:
-        print(f"⚠️ 警告：目录 {pdf_dir} 下没有 PDF 文件，请上传手册。")
-        return
-
-    pdf_file = os.path.join(pdf_dir, files[0])
-    
-    try:
-        # 鲁棒性体现：增加异常捕捉
-        reader = PdfReader(pdf_file)
-        print(f"✅ 成功加载手册: {files[0]}")
-        print(f"📄 总页数: {len(reader.pages)}")
-        
-        # 尝试读取内容
-        page_text = reader.pages[15].extract_text()
-        print("\n--- 内容预览 ---")
-        print(page_text[:200])
-        
-    except Exception as e:
-        print(f"❌ 解析 PDF 时发生错误: {e}")
+    print(f"🔍 扫描完成！共发现 {len(manuals)} 本手册：")
+    for m in manuals:
+        try:
+            reader = PdfReader(m['path'])
+            print(f"✅ 品牌标签: [{m['tag']}] | 文件: {m['filename']} | 页数: {len(reader.pages)}")
+        except Exception as e:
+            print(f"❌ 无法读取 {m['filename']}: {e}")
 
 if __name__ == "__main__":
-    check_and_read()
+    # 运行测试，看看它能不能把你现在的 byd 和 tesla 都扫描出来
+    check_all_manuals()
