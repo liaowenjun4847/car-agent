@@ -1,10 +1,9 @@
 import sys
 import json
-import logging
 import time
-import random
+import streamlit as st
 
-# --- 1. 核心生存补丁 (必须在最顶部) ---
+# --- 1. 核心生存补丁 ---
 try:
     import pysqlite3
     sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
@@ -15,156 +14,117 @@ except ImportError:
     except:
         pass
 
-import streamlit as st
+# --- 2. 顶级配置 ---
+st.set_page_config(page_title="车灵 AI - 智慧全能专家", page_icon="⚡", layout="wide")
 
-# --- 2. 网页顶级配置 ---
-st.set_page_config(
-    page_title="车灵 AI - 全品牌智能汽车专家",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# --- 3. 资源级初始化 (使用缓存避免白屏) ---
+# --- 3. 资源初始化 ---
 @st.cache_resource
 def get_system_engine():
     from openai import OpenAI
     from zhipuai import ZhipuAI
     import chromadb
-    
-    # 从 Secrets 获取配置
-    dk = st.secrets["DEEPSEEK_KEY"]
-    zk = st.secrets["ZHIPU_KEY"]
-    base_url = st.secrets.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-    db_path = "data/vector_db"
-
-    ai = OpenAI(api_key=dk, base_url=base_url, timeout=60.0)
-    zp = ZhipuAI(api_key=zk)
-    
-    # 初始化数据库
-    chroma = chromadb.PersistentClient(path=db_path)
+    ai = OpenAI(api_key=st.secrets["DEEPSEEK_KEY"], base_url="https://api.deepseek.com")
+    zp = ZhipuAI(api_key=st.secrets["ZHIPU_KEY"])
+    chroma = chromadb.PersistentClient(path="data/vector_db")
     coll = chroma.get_or_create_collection(name="car_manual_zhipu")
-    
     return ai, zp, coll
 
-# 尝试初始化，失败则优雅报错
-try:
-    ai_client, zp_client, collection = get_system_engine()
-except Exception as e:
-    st.error(f"⚠️ 系统引擎启动失败: {e}")
-    st.stop()
+ai_client, zp_client, collection = get_system_engine()
 
-# 尝试导入工具类
-try:
-    from tools import get_weather, TOOLS_DEFINITION
-except:
-    get_weather = None
-    TOOLS_DEFINITION = []
+# --- 4. 核心功能函数 ---
 
-# --- 4. 侧边栏构建 (借鉴第一版，增强丰富度) ---
-with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=60)
-    st.title("车灵 AI 智库")
-    st.markdown("---")
-    
-    st.subheader("🏎️ 已激活知识库")
-    st.success("✅ 比亚迪 (Qin PLUS)")
-    st.success("✅ 特斯拉 (Model Y)")
-    st.info("🕒 小米 / 问界 (即将上线)")
-    
-    st.markdown("---")
-    st.subheader("📊 引擎状态")
-    cols = st.columns(2)
-    cols[0].metric("LLM", "DeepSeek")
-    cols[1].metric("RAG", "ChromaDB")
-    
-    st.caption("实时天气系统：已连接 🟢")
-    st.caption("向量空间：Zhipu Embedding-3")
-    
-    if st.button("🧹 清除记忆并重启"):
-        st.session_state.messages = []
-        st.session_state.conversation_history = []
-        st.rerun()
+def get_dynamic_suggestions(history):
+    """Gemini 风格：根据对话历史预测后续问题"""
+    try:
+        context = [h for h in history if h['role'] != 'system'][-3:] # 取最近3轮
+        prompt = f"根据以下对话内容，预测用户接下来最可能问的3个简洁问题（汽车相关）。只需返回JSON列表，格式: ['问题1', '问题2', '问题3']。对话记录: {context}"
+        res = ai_client.chat.completions.create(model="deepseek-chat", messages=[{"role": "user", "content": prompt}], temperature=0.7)
+        return json.loads(res.choices[0].message.content)
+    except:
+        return ["特斯拉和比亚迪的续航对比", "如何保养新能源车电池？", "介绍一下最新的自动驾驶技术"]
 
-# --- 5. 核心 Agent 逻辑 (融合 Gemini 风格的思考过程) ---
 def run_agent(user_query):
     if "conversation_history" not in st.session_state:
-        st.session_state.conversation_history = [{"role": "system", "content": "你是一位精通全车系的专家..."}]
+        st.session_state.conversation_history = [{"role": "system", "content": "你是一位百科全书式的汽车专家。优先使用检索资料，若资料不足，请调用你自有的知识库给出专业解答。"}]
     
     history = st.session_state.conversation_history
     history.append({"role": "user", "content": user_query})
 
-    # A. 意图提取
-    intent_res = ai_client.chat.completions.create(
-        model="deepseek-chat",
-        messages=[{"role": "user", "content": f"提取品牌标签(tesla/qin_plus/all): {user_query}"}],
-        temperature=0
-    )
-    detected_tag = intent_res.choices[0].message.content.strip().lower()
-
-    # B. RAG 检索
-    with st.status("🔍 正在多维度检索汽车手册...", expanded=False) as status:
-        st.write(f"目标车型: {detected_tag}")
+    # A. RAG 检索过程
+    with st.status("🔍 正在跨时空检索资料...", expanded=False) as status:
         try:
-            res = zp_client.embeddings.create(model="embedding-3", input=user_query)
-            q_vector = res.data[0].embedding
+            # 意图识别
+            intent_res = ai_client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": f"提取品牌(tesla/qin_plus/all): {user_query}"}],
+                temperature=0
+            )
+            tag = intent_res.choices[0].message.content.strip().lower()
             
-            search_params = {"query_embeddings": [q_vector], "n_results": 5}
-            if 'all' not in detected_tag:
-                tags = [t.strip() for t in detected_tag.split(",")]
-                search_params["where"] = {"car_model": {"$in": tags}} if len(tags) > 1 else {"car_model": tags[0]}
+            # 向量检索
+            emb = zp_client.embeddings.create(model="embedding-3", input=user_query).data[0].embedding
+            search_args = {"query_embeddings": [emb], "n_results": 4}
+            if 'all' not in tag:
+                search_args["where"] = {"car_model": tag}
             
-            results = collection.query(**search_params)
-            
-            context_list = []
-            for doc, meta in zip(results['documents'][0], results['metadatas'][0]):
-                context_list.append(f"【{meta['car_model']}】: {doc}")
-            rag_context = "\n---\n".join(context_list)
-            st.write("✅ 成功提取关联条目")
+            results = collection.query(**search_args)
+            rag_context = "\n".join(results['documents'][0]) if results['documents'][0] else "知识库未覆盖此细节。"
+            status.update(label="✅ 知识库检索完成", state="complete")
         except:
-            rag_context = "暂无相关参考。"
-        status.update(label="✅ 资料检索完成", state="complete")
+            rag_context = "正在切换至全能大模型模式..."
+            status.update(label="🌐 正在使用大模型通用知识", state="complete")
 
-    # C. 最终回复
+    # B. 最终生成 (整合 RAG + LLM 知识)
     final_messages = history.copy()
-    final_messages.append({"role": "system", "content": f"参考资料:\n{rag_context}"})
+    final_messages.append({"role": "system", "content": f"已知手册资料（仅供参考）: {rag_context}\n如果资料不足，请用你的通用汽车知识回答，不要说'我不知道'。"})
     
-    response = ai_client.chat.completions.create(
-        model="deepseek-chat",
-        messages=final_messages,
-        temperature=0.3
-    )
-    
+    response = ai_client.chat.completions.create(model="deepseek-chat", messages=final_messages, temperature=0.5)
     answer = response.choices[0].message.content
     history.append({"role": "assistant", "content": answer})
-    st.session_state.conversation_history = history
+    
+    # C. 更新建议词
+    st.session_state.suggestions = get_dynamic_suggestions(history)
     return answer
 
-# --- 6. 主界面渲染 ---
-st.markdown("# ⚡ 车灵 **全品牌** 智能汽车专家")
-st.markdown("> 融合实时天气、多车主手册、跨品牌对比的 AI 助手")
+# --- 5. UI 界面 ---
+with st.sidebar:
+    st.title("⚡ 车灵 AI 智库")
+    st.info("🚗 核心库：比亚迪 / 特斯拉")
+    st.metric("核心大脑", "DeepSeek-V3")
+    if st.button("🗑️ 开启新对话"):
+        st.session_state.messages = []
+        st.session_state.conversation_history = []
+        st.session_state.suggestions = ["比亚迪秦PLUS的优点是什么？", "特斯拉Model Y的辅助驾驶怎么用？", "今天适合洗车吗？"]
+        st.rerun()
+
+st.markdown("# ⚡ 车灵 **全能** 汽车助手")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    st.session_state.suggestions = ["比亚迪秦PLUS的优点是什么？", "特斯拉Model Y的辅助驾驶怎么用？", "北京现在的天气适合开车吗？"]
 
-# 对话展示容器
+# 渲染对话
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 用户输入
-if prompt := st.chat_input("您可以问：特斯拉和比亚迪的灯光开启方式有什么不同？"):
+# 渲染动态建议按钮 (Gemini 标志性设计)
+cols = st.columns(len(st.session_state.suggestions))
+for i, suggestion in enumerate(st.session_state.suggestions):
+    if cols[i].button(f"💡 {suggestion}", use_container_width=True):
+        st.session_state.pushed_suggestion = suggestion
+
+# 处理输入
+input_placeholder = "您可以问："+st.session_state.suggestions[0]+"..."
+if prompt := (st.chat_input(input_placeholder) or st.session_state.get("pushed_suggestion")):
+    st.session_state.pushed_suggestion = None # 清空临时点击
+    
     with st.chat_message("user"):
         st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant"):
-        start_t = time.time()
-        # 这里是 Gemini 风格的关键：展示思考步骤
         ans = run_agent(prompt)
         st.markdown(ans)
-        
-        end_t = time.time()
-        st.caption(f"🧠 计算耗时: {round(end_t-start_t, 2)}s | 动力来源: DeepSeek-V3 & ChromaDB")
-    
     st.session_state.messages.append({"role": "assistant", "content": ans})
+    st.rerun() # 强制刷新以更新输入框的 placeholder 和建议按钮
