@@ -48,7 +48,6 @@
 
 ## 🚀 快速启动 (Quick Start)
 
-### 1. 克隆项目
+### 项目网址
 ```bash
-git clone [https://github.com/你的用户名/car-agent.git](https://github.com/你的用户名/car-agent.git)
-cd car-agent
+https://auto-mind.streamlit.app/
