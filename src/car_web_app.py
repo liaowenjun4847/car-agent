@@ -7,10 +7,15 @@ import streamlit as st
 
 # --- 1. 环境补丁与初始化 ---
 try:
-    __import__('pysqlite3')
+    import pysqlite3
     sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 except ImportError:
-    pass
+    # 如果找不到 pysqlite3，尝试导入 pysqlite3-binary
+    try:
+        __import__('pysqlite3_binary')
+        sys.modules['sqlite3'] = sys.modules.pop('pysqlite3_binary')
+    except ImportError:
+        pass
 
 from openai import OpenAI
 from zhipuai import ZhipuAI
