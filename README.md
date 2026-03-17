@@ -1,4 +1,4 @@
-⚡ 车灵 AI (AutoMind AI) - 全品牌智能汽车专家
+**⚡ 车灵 AI (AutoMind AI) - 全品牌智能汽车专家**
 不仅仅是手册查询，更是懂每一辆车的智能大脑。
 
 Streamlit App
