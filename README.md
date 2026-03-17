@@ -3,6 +3,7 @@
 > **不仅仅是手册查询，更是懂每一辆车的智能大脑。**
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge.svg)](https://auto-mind.streamlit.app/)
+[![Streamlit App](https://img.shields.io/badge/Streamlit-App-blue?logo=streamlit)](https://auto-mind.streamlit.app/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
